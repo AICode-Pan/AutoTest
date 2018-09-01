@@ -5,6 +5,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -18,8 +20,10 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Random;
 
 /**
  * <pre>
@@ -34,7 +38,12 @@ public class AutoTest {
     private static final String TAG = "AutoTest";
     private static AutoTest autoTest;
     private Context context;
+    private AutoHandler mHandler;
     private int delayTime = 5000;
+
+    private static final int TYPE_AUTO_PERFORM_KEYEVENT = 0;
+    private static final int TYPE_AUTO_PERFORM_TOUCH = 1;
+    private static final int TYPE_AUTO_PERFORM_BROADCAST = 2;
     public static AutoTest getInstance() {
         if (autoTest == null) {
             autoTest = new AutoTest();
@@ -45,11 +54,51 @@ public class AutoTest {
 
     public void init(Context context) {
         this.context = context;
+        mHandler = new AutoHandler(new WeakReference<AutoTest>(this));
         Thread.setDefaultUncaughtExceptionHandler(new SimpleUncaughtExceptionHandler(context));
     }
 
-    public void performKeyEvent() {
+    private static class AutoHandler extends Handler {
+        private WeakReference<AutoTest> mWRAutoTest;
+        private AutoHandler(WeakReference<AutoTest> wrAutoTest) {
+            this.mWRAutoTest = wrAutoTest;
+        }
 
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            switch (msg.what) {
+                case TYPE_AUTO_PERFORM_KEYEVENT:
+                    mWRAutoTest.get().performKeyEvent();
+                    break;
+                case TYPE_AUTO_PERFORM_TOUCH:
+                    break;
+                case TYPE_AUTO_PERFORM_BROADCAST:
+                    break;
+            }
+        }
+    }
+
+    /**
+     * 3 -->  "KEYCODE_HOME"
+     * 4 -->  "KEYCODE_BACK"
+     * 19 -->  "KEYCODE_DPAD_UP"
+     * 20 -->  "KEYCODE_DPAD_DOWN"
+     * 21 -->  "KEYCODE_DPAD_LEFT"
+     * 22 -->  "KEYCODE_DPAD_RIGHT"
+     * 23 -->  "KEYCODE_DPAD_CENTER"
+     */
+    public void performKeyEvent() {
+        try {
+            Random rand = new Random();
+            int num = rand.nextInt(5)+19;
+            Log.i(TAG, "adb shell input keyevent " + num);
+            Runtime.getRuntime().exec("input keyevent " + num);
+
+            mHandler.sendEmptyMessageDelayed(TYPE_AUTO_PERFORM_KEYEVENT, delayTime);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void performTouch() {
@@ -62,13 +111,7 @@ public class AutoTest {
      * 根据autotest文件中的时间，语音内容，去发送广播
      */
     public void performBroadcast() {
-        File autotest = new File("/sdcard/autotest.txt");
-        String testInfo = null;
-        if (!autotest.exists()) {
-            testInfo = getFromRaw();
-        } else {
-            testInfo = getFromFile(autotest);
-        }
+        String testInfo = getTestContent();
         Log.i(TAG, "file info : " + testInfo);
         String[] contents = testInfo.split(",");
         int lenght = contents.length;
@@ -88,10 +131,23 @@ public class AutoTest {
     }
 
     /**
+     * 获取测试的内容信息
+     * @return
+     */
+    private String getTestContent() {
+        File autotest = new File("/sdcard/autotest.txt");
+        if (!autotest.exists()) {
+            return getFromRaw();
+        } else {
+            return getFromFile(autotest);
+        }
+    }
+
+    /**
      * 从assets中获取测试文件中的内容字符
      * @return
      */
-    public String getFromRaw(){
+    private String getFromRaw(){
         try {
             InputStreamReader inputReader = new InputStreamReader(context.getAssets().open("autotest.txt"));
             BufferedReader bufReader = new BufferedReader(inputReader);
@@ -111,7 +167,7 @@ public class AutoTest {
      * 从 /sdcard/ 目录下获取测试文件中的内容字符
      * @return
      */
-    public String getFromFile(File file){
+    private String getFromFile(File file){
         try {
             InputStream is = new FileInputStream(file);
             InputStreamReader input = new InputStreamReader(is, "UTF-8");
@@ -130,7 +186,7 @@ public class AutoTest {
         return null;
     }
 
-    public class SimpleUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+    private class SimpleUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
         private Context context;
         public SimpleUncaughtExceptionHandler(Context context) {
             this.context = context;

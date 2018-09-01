@@ -52,6 +52,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 Toast.makeText(MainActivity.this, "Hello Word!", Toast.LENGTH_SHORT).show();
                 break;
             case 1:
+                AutoTest.getInstance().performKeyEvent();
                 break;
             case 2:
                 intent.setAction("");
